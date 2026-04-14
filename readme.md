@@ -104,9 +104,7 @@
 
 #### 数据集说明
 
-- 数据集名称：待补充
-- 数据集描述：待补充
-- 下载地址：待补充
-- 本地路径：待补充
+- 数据集名称：动漫头像 Anime Faces
+- 数据集描述：从二次元网站 `www.getchu.com` 抓取的 21551 张动漫头像
+- 下载地址：[Anime Faces](https://www.kaggle.com/datasets/soumikrakshit/anime-faces/)
 
-> 请参考对应章节的具体说明或联系作者获取详细信息。

@@ -60,6 +60,7 @@ y_test <- torch_tensor(
 #  --- 第 6 章内容 ---
 
 library(luz)
+options(luz.force_progress_bar = TRUE) # 在 positron 编辑器中正确输出动态进度条
 
 # 简单封装为 Dataset (为了后续使用 Dataloader/Luz)
 ames_dataset <- dataset(
@@ -405,6 +406,79 @@ fitted_ffnn <- FlexibleMLP %>%
 metrics <- fitted_ffnn %>% evaluate(test_dl)
 print(metrics)
 
+
+
+
+library(mlr3mbo)
+library(bbotk)
+library(paradox)
+library(mlr3learners)
+library(rgenoud)
+
+# ==========================================
+# 封装评估引擎：接入你的 4 个核心参数
+# ==========================================
+torch_objective <- ObjectiveRFun$new(
+  
+  fun = function(xs) {
+    # 1. 将 mbo 传过来的参数，打包成 fit_one_trial 的 hparams
+    current_hparams <- list(
+      units = as.integer(xs$units),
+      drop  = xs$drop,
+      lr    = xs$lr,
+      decay = 10^xs$log_decay
+    )
+    
+    # 2. 将整个列表作为单一参数传给底层训练逻辑
+    final_val_loss <- fit_one_trial(
+      current_hparams, 
+      train_dl = train_dl,   # 传入训练集 DataLoader
+      valid_dl = test_dl    # 传入验证集 DataLoader
+    )
+    
+    # 3. 返回目标值
+    return(list(val_loss = final_val_loss))
+  },
+  
+  # 定义 4 维搜索空间
+  domain = ps(
+    units     = p_int(lower = 64, upper = 512),   
+    drop      = p_dbl(lower = 0.0, upper = 0.5),  
+    lr        = p_dbl(lower = 0.001, upper = 0.006), 
+    log_decay = p_dbl(lower = -5, upper = -3)
+  ),
+  
+  # 定义优化目标：最小化验证集误差
+  codomain = ps(val_loss = p_dbl(tags = "minimize"))
+)
+
+
+# ==========================================
+# 启动 4 维空间的贝叶斯优化
+# ==========================================
+terminator <- trm("evals", n_evals = 30)
+
+instance <- OptimInstanceBatchSingleCrit$new(
+  objective = torch_objective,
+  terminator = terminator
+)
+
+# 执行优化
+set.seed(42)
+opt("mbo")$optimize(instance)
+
+# 查看并还原最优参数
+best <- instance$result_x_domain
+
+cat(sprintf("
+- Units (隐藏节点数) : %d
+- Drop  (失活比例)   : %.4f
+- LR    (学习率)     : %.4f
+- Decay (权重衰减)   : %.4f
+    最小验证集 Loss  : %.4f
+", 
+best$units, best$drop, best$lr, 
+10^best$log_decay, instance$result_y))
 
 
 # ----------------------------------------------------- #
